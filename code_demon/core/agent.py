@@ -185,6 +185,23 @@ class Agent:
                         )
                         console.print(f"  [dim]{achievement.description}[/dim]")
 
+            # Memory indexing für wichtige Changes
+            if self.settings.memory_enabled:
+                memory = get_memory_system()
+
+                # File edits indexieren
+                if tool_call.name == "edit_file" and result and "Error" not in result:
+                    file_path = tool_call.arguments.get("path", "unknown")
+                    await memory.index_text(
+                        f"File modified: {file_path}\nChange: {result[:300]}..."
+                    )
+
+                # Git commits indexieren
+                elif tool_call.name == "git_commit" and result:
+                    await memory.index_text(
+                        f"Git commit: {tool_call.arguments.get('message', 'no message')}\n{result[:200]}"
+                    )
+
             console.print(f"  [dim green]✓ {tool_call.name} completed[/dim green]")
             return result
 
@@ -251,6 +268,29 @@ class Agent:
                         console.print(
                             f"  • {achievement.icon} {achievement.name} (+{achievement.points} pts)"
                         )
+
+            # Session ins Memory schreiben
+            if self.settings.memory_enabled and len(self.messages) > 3:
+                # Start new event loop since end_session is called after the main loop ends
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(self._index_session_summary())
+                    else:
+                        asyncio.run(self._index_session_summary())
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    asyncio.run(self._index_session_summary())
+
+    async def _index_session_summary(self) -> None:
+        """Index important parts of the session"""
+        memory = get_memory_system()
+
+        # Letzte paar Messages als Context
+        recent = self.messages[-5:]
+        summary = "\n".join([f"{m.role}: {m.content[:200]}" for m in recent])
+
+        await memory.index_text(f"Session summary:\n{summary}")
 
     def reset_conversation(self) -> None:
         """Reset conversation (keep system prompt)"""

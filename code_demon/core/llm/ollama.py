@@ -200,8 +200,3 @@ class OllamaProvider(LLMProvider):
                     return response.status == 200
         except Exception:
             return False
-
-
-# For convenience
-import asyncio
-

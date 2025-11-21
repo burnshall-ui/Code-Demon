@@ -15,10 +15,16 @@ from ..config.settings import get_settings
 # Try to import cognee, but don't fail if not installed (graceful degradation)
 try:
     import cognee
+    from cognee.api.v1.add import add as cognee_add
     from cognee.api.v1.search import search as cognee_search
+    from cognee.api.v1.cognify import cognify as cognee_cognify
     COGNEE_AVAILABLE = True
 except ImportError:
     COGNEE_AVAILABLE = False
+    # Define placeholders to avoid NameError
+    cognee_add = None
+    cognee_search = None
+    cognee_cognify = None
 
 console = Console()
 
@@ -73,11 +79,11 @@ class MemorySystem:
                 for doc in key_docs:
                     if Path(doc).exists():
                         content = Path(doc).read_text(encoding="utf-8")
-                        await cognee.add(content)
+                        await cognee_add(content)
                         docs_added = True
                 
                 if docs_added:
-                    await cognee.cognify()
+                    await cognee_cognify()
             except Exception as e:
                 console.print(f"[dim yellow]Auto-indexing docs failed: {e}[/dim yellow]")
 
@@ -93,27 +99,33 @@ class MemorySystem:
             return False
 
         try:
-            await cognee.add(text)
-            await cognee.cognify()
+            await cognee_add(text)
+            await cognee_cognify()
             return True
         except Exception as e:
             console.print(f"[dim red]Memory indexing failed: {e}[/dim red]")
             return False
 
-    async def search(self, query: str) -> List[str]:
+    async def search(self, query: str, limit: int = 5) -> List[str]:
         """
         Search memory for relevant context.
+        
+        Args:
+            query: Search query
+            limit: Maximum number of results to return (default: 5)
+        
+        Returns:
+            List of relevant search results
         """
         if not self.enabled or not self._initialized:
             return []
 
         try:
-            results = await cognee.search(query)
-            # Convert results to string list if they aren't already
+            results = await cognee_search(query)
+            # Top N relevanteste nehmen
+            results = results[:limit] if len(results) > limit else results
             return [str(r) for r in results]
-        except Exception as e:
-            # Silently fail on search errors to not interrupt chat
-            # console.print(f"[dim red]Memory search failed: {e}[/dim red]")
+        except Exception:
             return []
 
     async def index_project_files(self, path: Path = Path(".")) -> None:
@@ -135,14 +147,14 @@ class MemorySystem:
                         
                     try:
                         content = file_path.read_text(encoding="utf-8")
-                        await cognee.add(content)
+                        await cognee_add(content)
                         count += 1
                     except Exception:
                         continue
             
             if count > 0:
                 console.print(f"[dim]Cognifying {count} files...[/dim]")
-                await cognee.cognify()
+                await cognee_cognify()
                 console.print(f"[dim green]Indexed {count} files into memory.[/dim green]")
                 
         except Exception as e:
