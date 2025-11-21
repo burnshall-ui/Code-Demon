@@ -7,9 +7,20 @@ Main entry point for the CLI
 
 import asyncio
 import sys
+import os
+import logging
 import click
 from rich.console import Console
 from rich.prompt import Prompt
+
+# Suppress verbose logging from dependencies BEFORE imports
+os.environ.setdefault("COGNEE_LOG_LEVEL", "CRITICAL")
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("cognee").setLevel(logging.CRITICAL)
+logging.getLogger("httpx").setLevel(logging.CRITICAL)
+logging.getLogger("httpcore").setLevel(logging.CRITICAL)
+logging.getLogger("structlog").setLevel(logging.CRITICAL)
+logging.getLogger("lancedb").setLevel(logging.CRITICAL)
 
 from .config.settings import get_settings
 from .core.llm.ollama import OllamaProvider
@@ -228,13 +239,13 @@ def main(model: str | None, provider: str | None, personality: str | None) -> No
     # Print welcome
     print_welcome(settings.personality)
 
-    # Initialize memory system
-    print_info("Initializing neural pathways (memory)...")
+    # Initialize memory system (silently - it's optional)
     try:
         memory_system = get_memory_system()
         asyncio.run(memory_system.initialize())
-    except Exception as e:
-        print_error(f"Memory initialization failed: {e}")
+    except Exception:
+        # Silently fail - memory is optional
+        pass
 
     # Run chat loop
     try:

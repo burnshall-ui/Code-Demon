@@ -43,13 +43,53 @@ class Agent:
         self.max_conversation_length = self.settings.max_conversation_length
         self.max_tool_depth = self.settings.max_tool_depth
 
+        # Token tracking
+        self.total_tokens = 0
+        self.total_responses = 0
+
         # Initialize system prompt
         self._initialize_system_prompt()
 
     def _initialize_system_prompt(self) -> None:
         """Initialize system prompt based on personality"""
         system_prompt = get_system_prompt(self.settings.personality)
-        self.messages.append(Message(role=MessageRole.SYSTEM, content=system_prompt))
+
+        # Add dynamic tool list to system prompt
+        tools_info = self._generate_tools_reference()
+        enhanced_prompt = f"{system_prompt}\n\n{tools_info}"
+
+        self.messages.append(Message(role=MessageRole.SYSTEM, content=enhanced_prompt))
+
+    def _generate_tools_reference(self) -> str:
+        """Generate a reference list of available tools"""
+        tools_by_category = {}
+
+        for tool_name in self.registry.list_tools():
+            tool = self.registry.get_tool(tool_name)
+            if tool:
+                category = tool.metadata.category.value
+                if category not in tools_by_category:
+                    tools_by_category[category] = []
+
+                tools_by_category[category].append({
+                    'name': tool_name,
+                    'description': tool.metadata.description
+                })
+
+        # Build the reference text
+        lines = ["=" * 60, "AVAILABLE TOOLS (Use ONLY these tools - do not invent new ones):", "=" * 60, ""]
+
+        for category in sorted(tools_by_category.keys()):
+            lines.append(f"[{category.upper()}]")
+            for tool in tools_by_category[category]:
+                lines.append(f"  • {tool['name']}: {tool['description']}")
+            lines.append("")
+
+        lines.append("=" * 60)
+        lines.append("IMPORTANT: These are the ONLY tools available. Do not use or invent any other tool names!")
+        lines.append("=" * 60)
+
+        return "\n".join(lines)
 
     async def chat(self, user_message: str) -> str:
         """
@@ -100,10 +140,17 @@ class Agent:
         """Process LLM response with tool calling loop"""
         depth = 0
         final_response = ""
+        last_response = None
 
         while depth < self.max_tool_depth:
             # Call LLM
             response = await self.llm.chat(self.messages, tools)
+            last_response = response
+
+            # Track tokens
+            if response.tokens_used:
+                self.total_tokens += response.tokens_used
+                self.total_responses += 1
 
             # Check if we have tool calls
             if not response.tool_calls:
@@ -134,6 +181,10 @@ class Agent:
 
         if depth >= self.max_tool_depth:
             final_response += f"\n\n(Max tool depth reached: {self.max_tool_depth})"
+
+        # Show performance metrics after response
+        if last_response and last_response.tokens_per_second:
+            console.print(f"\n[dim]⚡ {last_response.tokens_per_second:.1f} tok/sec[/dim]")
 
         return final_response
 
@@ -187,20 +238,24 @@ class Agent:
 
             # Memory indexing für wichtige Changes
             if self.settings.memory_enabled:
-                memory = get_memory_system()
+                try:
+                    memory = get_memory_system()
 
-                # File edits indexieren
-                if tool_call.name == "edit_file" and result and "Error" not in result:
-                    file_path = tool_call.arguments.get("path", "unknown")
-                    await memory.index_text(
-                        f"File modified: {file_path}\nChange: {result[:300]}..."
-                    )
+                    # File edits indexieren
+                    if tool_call.name == "edit_file" and result and "Error" not in result:
+                        file_path = tool_call.arguments.get("path", "unknown")
+                        await memory.index_text(
+                            f"File modified: {file_path}\nChange: {result[:300]}..."
+                        )
 
-                # Git commits indexieren
-                elif tool_call.name == "git_commit" and result:
-                    await memory.index_text(
-                        f"Git commit: {tool_call.arguments.get('message', 'no message')}\n{result[:200]}"
-                    )
+                    # Git commits indexieren
+                    elif tool_call.name == "git_commit" and result:
+                        await memory.index_text(
+                            f"Git commit: {tool_call.arguments.get('message', 'no message')}\n{result[:200]}"
+                        )
+                except Exception:
+                    # Silently fail - memory is optional
+                    pass
 
             console.print(f"  [dim green]✓ {tool_call.name} completed[/dim green]")
             return result
@@ -269,6 +324,15 @@ class Agent:
                             f"  • {achievement.icon} {achievement.name} (+{achievement.points} pts)"
                         )
 
+        # Show token statistics
+        if self.total_tokens > 0:
+            console.print("\n[bold cyan]📊 Token Statistics[/bold cyan]")
+            console.print(f"  • Total tokens: {self.total_tokens:,}")
+            console.print(f"  • Responses: {self.total_responses}")
+            if self.total_responses > 0:
+                avg_tokens = self.total_tokens / self.total_responses
+                console.print(f"  • Avg tokens/response: {avg_tokens:.1f}")
+
             # Session ins Memory schreiben
             if self.settings.memory_enabled and len(self.messages) > 3:
                 try:
@@ -282,8 +346,9 @@ class Agent:
                     except RuntimeError:
                         # No event loop running, create a new one
                         asyncio.run(self._index_session_summary())
-                except Exception as e:
-                    console.print(f"[dim yellow]Session summary indexing failed: {e}[/dim yellow]")
+                except Exception:
+                    # Silently fail - memory indexing is optional
+                    pass
 
     async def _index_session_summary(self) -> None:
         """Index important parts of the session"""

@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     require_approval: bool = Field(default=True)
     achievements_enabled: bool = Field(default=True)
     history_enabled: bool = Field(default=True)
-    memory_enabled: bool = Field(default=True)
+    memory_enabled: bool = Field(default=False)  # Disabled by default (requires Cognee LLM API key)
 
     # Personality
     personality: Literal["cynical", "professional", "friendly"] = Field(default="cynical")

@@ -6,11 +6,17 @@ Provides long-term memory capabilities using Cognee's graph/vector store.
 
 import os
 import asyncio
+import logging
 from pathlib import Path
 from typing import List, Optional, Any
 from rich.console import Console
 
 from ..config.settings import get_settings
+
+# Suppress Cognee's verbose logging
+logging.getLogger("cognee").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.ERROR)
+logging.getLogger("httpcore").setLevel(logging.ERROR)
 
 # Try to import cognee, but don't fail if not installed (graceful degradation)
 try:
@@ -46,8 +52,7 @@ class MemorySystem:
         Sets up environment variables for local storage to avoid Docker requirements.
         """
         if not self.enabled:
-            if self.settings.memory_enabled and not COGNEE_AVAILABLE:
-                console.print("[dim yellow]Warning: Memory enabled but 'cognee' not installed.[/dim yellow]")
+            # Silently disable if not available - no warnings needed
             return
 
         try:
@@ -67,12 +72,12 @@ class MemorySystem:
             
             # Since I can't verify the exact env vars for embedded mode without docs,
             # I will assume standard behavior but wrap in try/except.
-            
-            self._initialized = True
-            console.print("[dim green]Memory system initialized.[/dim green]")
 
-            # Auto-index key documentation on startup to ensure context
-            # This is fast enough for small docs and ensures the agent knows the project
+            self._initialized = True
+            # Silently initialized - no output needed
+
+            # Auto-index key documentation on startup
+            # Silently fail if it doesn't work - memory is optional
             try:
                 key_docs = ["README.md", "PROJECT_SUMMARY.md", "QUICKSTART.md"]
                 docs_added = False
@@ -81,11 +86,12 @@ class MemorySystem:
                         content = Path(doc).read_text(encoding="utf-8")
                         await cognee_add(content)
                         docs_added = True
-                
+
                 if docs_added:
                     await cognee_cognify()
-            except Exception as e:
-                console.print(f"[dim yellow]Auto-indexing docs failed: {e}[/dim yellow]")
+            except Exception:
+                # Silently fail - memory is optional
+                pass
 
         except Exception as e:
             console.print(f"[dim red]Failed to initialize memory: {e}[/dim red]")
@@ -103,7 +109,8 @@ class MemorySystem:
             await cognee_cognify()
             return True
         except Exception as e:
-            console.print(f"[dim red]Memory indexing failed: {e}[/dim red]")
+            # Silently fail for memory indexing - it's not critical
+            # Only log to console in debug mode
             return False
 
     async def search(self, query: str, limit: int = 5) -> List[str]:

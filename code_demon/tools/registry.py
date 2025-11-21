@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Callable, List
 from dataclasses import dataclass, field
 from enum import Enum
+from difflib import SequenceMatcher
 
 
 class ToolCategory(str, Enum):
@@ -153,6 +154,36 @@ class ToolRegistry:
         """Set the approval handler for dangerous operations"""
         self._approval_handler = handler
 
+    def _find_similar_tools(self, tool_name: str, max_suggestions: int = 3) -> List[str]:
+        """
+        Find similar tool names using fuzzy string matching
+
+        Args:
+            tool_name: The tool name that wasn't found
+            max_suggestions: Maximum number of suggestions to return
+
+        Returns:
+            List of similar tool names, sorted by similarity
+        """
+        similarities = []
+
+        for available_tool in self._tools.keys():
+            # Calculate similarity ratio
+            ratio = SequenceMatcher(None, tool_name.lower(), available_tool.lower()).ratio()
+
+            # Also check if the query is a substring or vice versa
+            if tool_name.lower() in available_tool.lower() or available_tool.lower() in tool_name.lower():
+                ratio += 0.3  # Boost substring matches
+
+            similarities.append((available_tool, ratio))
+
+        # Sort by similarity score (descending)
+        similarities.sort(key=lambda x: x[1], reverse=True)
+
+        # Return top matches with similarity > 0.4
+        suggestions = [name for name, score in similarities[:max_suggestions] if score > 0.4]
+        return suggestions
+
     async def execute_tool(self, name: str, arguments: Dict[str, Any]) -> str:
         """
         Execute a tool with given arguments
@@ -171,7 +202,32 @@ class ToolRegistry:
         """
         tool = self.get_tool(name)
         if not tool:
-            raise ToolNotFoundError(f"Tool '{name}' not found")
+            # Find similar tools and provide helpful suggestions
+            suggestions = self._find_similar_tools(name)
+
+            error_msg = f"Tool '{name}' does not exist."
+
+            if suggestions:
+                error_msg += f"\n\nDid you mean one of these?\n"
+                for suggestion in suggestions:
+                    tool_obj = self._tools.get(suggestion)
+                    if tool_obj:
+                        error_msg += f"  • {suggestion} - {tool_obj.metadata.description}\n"
+                error_msg += "\nIMPORTANT: Only use tools that actually exist. Do not invent tool names."
+            else:
+                # No suggestions - list available tools in the relevant category
+                error_msg += f"\n\nNo similar tools found. Available tools:\n"
+                categories = {}
+                for tool_name, tool_obj in self._tools.items():
+                    cat = tool_obj.metadata.category.value
+                    if cat not in categories:
+                        categories[cat] = []
+                    categories[cat].append(tool_name)
+
+                for category, tools in sorted(categories.items()):
+                    error_msg += f"\n{category}: {', '.join(tools)}"
+
+            raise ToolNotFoundError(error_msg)
 
         # Check if approval is required
         if tool.metadata.requires_approval:

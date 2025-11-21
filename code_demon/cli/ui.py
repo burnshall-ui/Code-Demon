@@ -97,15 +97,20 @@ def print_stats(history_storage, achievement_tracker) -> None:
     """Print session statistics"""
     stats = history_storage.get_stats()
 
+    # Include current session stats if active
+    current_session_count = 1 if history_storage.current_session else 0
+    current_messages = len(history_storage.current_session.messages) if history_storage.current_session else 0
+    current_tools = len(history_storage.current_session.tools_called) if history_storage.current_session else 0
+
     table = Table(title="📊 Statistics", border_style="red")
     table.add_column("Metric", style="cyan")
     table.add_column("Value", style="white")
 
-    table.add_row("Total Sessions", str(stats.total_sessions))
+    table.add_row("Total Sessions", str(stats.total_sessions + current_session_count))
     table.add_row("Successful", str(stats.successful_sessions))
     table.add_row("Failed", str(stats.failed_sessions))
-    table.add_row("Total Messages", str(stats.total_messages))
-    table.add_row("Total Tool Calls", str(stats.total_tool_calls))
+    table.add_row("Total Messages", str(stats.total_messages + current_messages))
+    table.add_row("Total Tool Calls", str(stats.total_tool_calls + current_tools))
     table.add_row("Avg Session Duration", f"{stats.average_session_duration:.1f} min")
     table.add_row("", "")
     table.add_row("Achievements Earned", str(len(achievement_tracker.earned)))
@@ -113,6 +118,11 @@ def print_stats(history_storage, achievement_tracker) -> None:
         "Achievement Progress", f"{achievement_tracker.get_progress_percentage():.1f}%"
     )
     table.add_row("Total Points", str(achievement_tracker.get_total_points()))
+
+    if history_storage.current_session:
+        table.add_row("", "")
+        table.add_row("[dim]Current Session Messages[/dim]", f"[dim]{current_messages}[/dim]")
+        table.add_row("[dim]Current Session Tools[/dim]", f"[dim]{current_tools}[/dim]")
 
     console.print()
     console.print(table)
