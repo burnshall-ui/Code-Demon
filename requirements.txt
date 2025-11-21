@@ -1,0 +1,18 @@
+# Core Dependencies
+ollama>=0.1.0
+requests>=2.31.0
+rich>=13.7.0
+click>=8.1.7
+python-dotenv>=1.0.0
+gitpython>=3.1.40
+aiohttp>=3.9.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Dev Dependencies (optional)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.12.0
+ruff>=0.1.9
+mypy>=1.8.0
+

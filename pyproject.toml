@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "code-demon"
+version = "0.1.0"
+description = "AI-powered coding agent with server admin capabilities"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "burnshall-ui"}
+]
+keywords = ["ai", "agent", "coding", "ollama", "llm", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "ollama>=0.1.0",
+    "requests>=2.31.0",
+    "rich>=13.7.0",
+    "click>=8.1.7",
+    "python-dotenv>=1.0.0",
+    "gitpython>=3.1.40",
+    "aiohttp>=3.9.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "cognee>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.12.0",
+    "ruff>=0.1.9",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+code-demon = "code_demon.__main__:main"
+demon = "code_demon.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["code_demon*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
