@@ -271,16 +271,19 @@ class Agent:
 
             # Session ins Memory schreiben
             if self.settings.memory_enabled and len(self.messages) > 3:
-                # Start new event loop since end_session is called after the main loop ends
                 try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.create_task(self._index_session_summary())
-                    else:
+                    # Start new event loop since end_session is called after the main loop ends
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            loop.create_task(self._index_session_summary())
+                        else:
+                            asyncio.run(self._index_session_summary())
+                    except RuntimeError:
+                        # No event loop running, create a new one
                         asyncio.run(self._index_session_summary())
-                except RuntimeError:
-                    # No event loop running, create a new one
-                    asyncio.run(self._index_session_summary())
+                except Exception as e:
+                    console.print(f"[dim yellow]Session summary indexing failed: {e}[/dim yellow]")
 
     async def _index_session_summary(self) -> None:
         """Index important parts of the session"""
@@ -288,7 +291,7 @@ class Agent:
 
         # Letzte paar Messages als Context
         recent = self.messages[-5:]
-        summary = "\n".join([f"{m.role}: {m.content[:200]}" for m in recent])
+        summary = "\n".join([f"{m.role.value}: {m.content[:200]}" for m in recent])
 
         await memory.index_text(f"Session summary:\n{summary}")
 
